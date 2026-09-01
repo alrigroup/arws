@@ -13,9 +13,9 @@ ALRIGROUP@APPMAKE
     "steps": [
       {
         "name": "cc",
-        "cmd": "gcc -shared -fPIC -O2 -I. -I../../ALRIOS/core -I../../ALRIOS/arkernel/include -I../../ALRIOS/arkernel/ipc -I../../ALRIOS/arkernel/os/include -o $STAGING/libarws.arlib arws_entry.c arws_gateway.c arws_utils.c arws_config.c arws_ratelimit.c arws_session.c arws_cache.c arws_proxy.c arws_stream_proxy.c arws_upstream.c arws_health.c modes.c router_ex.c registry.c dispatcher.c server.c cJSON.c -L$ARCORE/lib -larkernel -lssl -lcrypto -lpthread"
+        "cmd": "gcc -shared -fPIC -O2 -Isrc -I../../ALRIOS/core -I../../ALRIOS/arkernel/include -I../../ALRIOS/arkernel/ipc -I../../ALRIOS/arkernel/os/include -o $STAGING/libarws.arlib src/arws_entry.c src/arws_gateway.c src/arws_utils.c src/arws_config.c src/arws_ratelimit.c src/arws_session.c src/arws_cache.c src/arws_proxy.c src/arws_stream_proxy.c src/arws_upstream.c src/arws_health.c src/modes.c src/router_ex.c src/registry.c src/dispatcher.c src/server.c src/cJSON.c -L$ARCORE/lib -larkernel -lssl -lcrypto -lpthread"
       }
     ]
   },
-  "files": ["libarws.arlib", "web/404/index.html", "web/maintenance/index.html"]
+  "files": ["libarws.arlib", "src/web/404/index.html", "src/web/maintenance/index.html"]
 }
