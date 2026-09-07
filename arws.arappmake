@@ -2,7 +2,7 @@ ALRIGROUP@APPMAKE
 {
   "name": "arws",
   "bin": "arws.arapp",
-  "version": "1.0.0",
+  "version": "0.0.2",
   "runtime": "native",
   "entry": "libarws.arlib",
   "services": [
