@@ -2,11 +2,14 @@ ALRIGROUP@APPMAKE
 {
   "name": "arws",
   "bin": "arws.arapp",
-  "version": "0.2.0",
+  "version": "0.2.01",
   "runtime": "native",
   "entry": "libarws.arlib",
   "services": [
-    {"name": "arws", "entry": "arws_entry"}
+    {
+      "name": "arws",
+      "entry": "arws_entry"
+    }
   ],
   "build": {
     "staging": "$ARCORE/.staging/$APP_NAME",
@@ -17,5 +20,18 @@ ALRIGROUP@APPMAKE
       }
     ]
   },
-  "files": ["libarws.arlib", "src/web/404/index.html", "src/web/maintenance/index.html"]
+  "files": [
+    "libarws.arlib",
+    "src/web/404/index.html",
+    "src/web/maintenance/index.html"
+  ],
+  "description": "Gateway HTTP/HTTPS, Reverse Proxy e Load Balancer",
+  "commands": [
+    "routes",
+    "status",
+    "cfg reload",
+    "upstream list",
+    "maintenance",
+    "ping"
+  ]
 }
