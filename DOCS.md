@@ -2,7 +2,7 @@
 
 *ALRI Web Services — High-Performance Reverse Proxy, Gateway & Load Balancer*
 
-*Version: 0.2.01 | ALRI GROUP © 2026 | License: ARGLP*
+*Version: 0.2.01 | Engineered by ALRI Development | Governed by ALRI GROUP © 2026 | License: ARGLP*
 
 ---
 
@@ -914,5 +914,5 @@ gcc -shared -fPIC -O2 \
 ---
 
 *Document generated from source code analysis of ARWS v0.2.01.*
-*ALRI GROUP © 2026 — All rights reserved.*
+*Engineered by ALRI Development. Governed by ALRI GROUP © 2026 — All rights reserved.*
 *License: ARGLP (ALRI GROUP LICENSE PERMISSIVE — Version 2)*
