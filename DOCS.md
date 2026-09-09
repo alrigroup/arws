@@ -40,7 +40,7 @@
 
 ## 1. Overview & Ecosystem Placement
 
-**ARWS (ALRI Web Services)** is the Layer 7 HTTP/HTTPS reverse proxy, API gateway, and load balancer that sits at the front of the entire ALRIOS platform. Every inbound request from the public internet passes through ARWS before reaching any application, CDN, database API, or web native container.
+**ARWS (ALRI Web Services)** is the Layer 7 HTTP/HTTPS reverse proxy, API gateway, and load balancer that sits at the front of the entire ALRIOS platform. Every inbound request from the public internet passes through ARWS before reaching any application, CDN, database API, or web engine application.
 
 ### Key Capabilities
 
