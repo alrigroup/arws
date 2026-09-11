@@ -22,6 +22,25 @@
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdarg.h>
+
+/* Safe append helper eliminating overflowing-snprintf vulnerabilities (CWE-131, CWE-120) */
+static void append_resp(char *buf, size_t buf_size, int *cur_len, const char *fmt, ...) {
+    if (!buf || *cur_len < 0 || (size_t)*cur_len >= buf_size - 1) return;
+    va_list args;
+    va_start(args, fmt);
+    size_t rem = buf_size - (size_t)*cur_len;
+    int written = vsnprintf(buf + *cur_len, rem, fmt, args);
+    va_end(args);
+    if (written > 0) {
+        if ((size_t)written < rem) {
+            *cur_len += written;
+        } else {
+            *cur_len = (int)buf_size - 1;
+            buf[*cur_len] = '\0';
+        }
+    }
+}
 
 #ifdef _WIN32
 #include <winsock2.h>
@@ -364,27 +383,28 @@ static void handle_arws_query(int fd, const char *q, int len) {
             ArwsUpstreamPool pools[ARWS_MAX_POOLS];
             int pcount = arws_upstream_get_all_pools(pools, ARWS_MAX_POOLS);
             if (pcount == 0) {
-                rlen = snprintf(resp, AR_IPC_BUF_SIZE, "No upstream pools registered.\n");
+                rlen = snprintf(resp, sizeof(resp), "No upstream pools registered.\n");
             } else {
-                rlen = snprintf(resp, AR_IPC_BUF_SIZE, "UPSTREAM POOLS (%d):\n", pcount);
+                rlen = snprintf(resp, sizeof(resp), "UPSTREAM POOLS (%d):\n", pcount);
+                if (rlen < 0 || (size_t)rlen >= sizeof(resp)) rlen = (int)sizeof(resp) - 1;
                 for (int p = 0; p < pcount; p++) {
                     ArwsUpstreamPool *up = &pools[p];
                     const char *algo_str = (up->algo == ARWS_LB_ROUND_ROBIN) ? "round_robin" :
                                            (up->algo == ARWS_LB_LEAST_CONN) ? "least_conn" :
                                            (up->algo == ARWS_LB_IP_HASH) ? "ip_hash" : "weighted_round_robin";
-                    rlen += snprintf(resp + rlen, sizeof(resp) - rlen,
-                                     "  Pool '@%s' [algo=%s, nodes=%d]:\n",
-                                     up->name, algo_str, up->node_count);
+                    append_resp(resp, sizeof(resp), &rlen,
+                                "  Pool '@%s' [algo=%s, nodes=%d]:\n",
+                                up->name, algo_str, up->node_count);
                     for (int n = 0; n < up->node_count; n++) {
                         ArwsBackendNode *bn = &up->nodes[n];
-                        rlen += snprintf(resp + rlen, sizeof(resp) - rlen,
-                                         "    - %s:%d weight=%d conns=%d alive=%s backup=%s drain=%s reqs=%llu errs=%llu\n",
-                                         bn->host, bn->port, bn->weight, bn->active_conns,
-                                         bn->is_alive ? "UP" : "DOWN",
-                                         bn->is_backup ? "YES" : "NO",
-                                         bn->is_draining ? "YES" : "NO",
-                                         (unsigned long long)bn->total_requests,
-                                         (unsigned long long)bn->total_errors);
+                        append_resp(resp, sizeof(resp), &rlen,
+                                    "    - %s:%d weight=%d conns=%d alive=%s backup=%s drain=%s reqs=%llu errs=%llu\n",
+                                    bn->host, bn->port, bn->weight, bn->active_conns,
+                                    bn->is_alive ? "UP" : "DOWN",
+                                    bn->is_backup ? "YES" : "NO",
+                                    bn->is_draining ? "YES" : "NO",
+                                    (unsigned long long)bn->total_requests,
+                                    (unsigned long long)bn->total_errors);
                     }
                 }
             }
