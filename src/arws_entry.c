@@ -22,6 +22,11 @@
 #endif
 
 EXPORT int arws_entry(void) {
+    if (arws_init() != 0) {
+        alri_print_force(RED "[ARWS]" RST " Gateway init failed\n");
+        return -1;
+    }
+
     int rc = arws_config_load("storage/arws/arws.cfg");
     alri_print_force(CYN "[ARWS]" RST " Config load: %d\n", rc);
 
@@ -34,11 +39,6 @@ EXPORT int arws_entry(void) {
     alri_print_force(CYN "[ARWS]" RST " Alri Web Services starting...\n");
     alri_print_force(CYN "[ARWS]" RST " Mode: %s, Port: %d, Bind: %s (opmode=%d)\n",
                      arws_config_get_mode_name(), port, bind, mode);
-
-    if (arws_init() != 0) {
-        alri_print_force(RED "[ARWS]" RST " Gateway init failed\n");
-        return -1;
-    }
 
     /* enable graceful stop/restart from the core control channel */
     ar_svc_set_stop_hook("arws", arws_stop);

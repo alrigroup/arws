@@ -431,21 +431,36 @@ int arws_config_load(const char *path) {
                     char *path = slash + 1;
 
                     int is_stream = 0;
-                    char stream_url[512] = "";
+                    int is_redirect = 0;
+                    char target_buf[512] = {0};
+
                     if (strncmp(val, "stream ", 7) == 0) {
                         is_stream = 1;
-                        strncpy(stream_url, val + 7, sizeof(stream_url) - 1);
-                        stream_url[sizeof(stream_url) - 1] = '\0';
-                        char *nl = strchr(stream_url, '\n');
-                        if (nl) *nl = '\0';
+                        strncpy(target_buf, val + 7, sizeof(target_buf) - 1);
+                    } else if (strncmp(val, "redirect ", 9) == 0) {
+                        is_redirect = 1;
+                        strncpy(target_buf, val + 9, sizeof(target_buf) - 1);
+                    } else {
+                        strncpy(target_buf, val, sizeof(target_buf) - 1);
                     }
+                    target_buf[sizeof(target_buf) - 1] = '\0';
+                    trim(target_buf);
+                    int tlen = (int)strlen(target_buf);
+                    if (tlen >= 2 && target_buf[0] == '"' && target_buf[tlen - 1] == '"') {
+                        target_buf[tlen - 1] = '\0';
+                        memmove(target_buf, target_buf + 1, strlen(target_buf));
+                    }
+                    trim(target_buf);
 
-                    const char *target = is_stream ? stream_url : val;
+                    const char *target = target_buf;
 
                     if (strncmp(target, "http://", 7) == 0 || strncmp(target, "https://", 8) == 0
                         || strncmp(target, "ws://", 5) == 0 || strncmp(target, "wss://", 6) == 0) {
 
-                        if (is_stream) {
+                        if (is_redirect) {
+                            arws_add_redirect_route(path, "*", host,
+                                                    arws_config_get_global_mode(), target);
+                        } else if (is_stream) {
                             arws_add_stream_route(path, "*", host,
                                                   arws_config_get_global_mode(), target);
                             if (stream_route_count < MAX_OVERRIDES) {
