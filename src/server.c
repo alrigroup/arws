@@ -278,11 +278,13 @@ void server_add_header(ClientConnection *conn, const char *header_line) {
         }
     }
     sanitized[si] = '\0';
-    int current_len = strlen(conn->response_headers);
-    int line_len = strlen(sanitized);
-    if (current_len + line_len + 2 < (int)sizeof(conn->response_headers) - 1) {
-        strcat(conn->response_headers, sanitized);
-        strcat(conn->response_headers, "\r\n");
+    int current_len = (int)strlen(conn->response_headers);
+    int line_len = (int)strlen(sanitized);
+    if ((size_t)(current_len + line_len + 3) < sizeof(conn->response_headers)) {
+        memcpy(conn->response_headers + current_len, sanitized, line_len);
+        conn->response_headers[current_len + line_len] = '\r';
+        conn->response_headers[current_len + line_len + 1] = '\n';
+        conn->response_headers[current_len + line_len + 2] = '\0';
     }
 }
 
@@ -611,9 +613,10 @@ static void handle_client(ClientConnection *conn) {
     url_decode(full_path, full_path);
 
     if (strchr(full_path, '%')) {
-        char *second_pass = (char *)ar_mem_alloc(strlen(full_path) + 1);
+        size_t fp_len = strlen(full_path);
+        char *second_pass = (char *)ar_mem_alloc(fp_len + 1);
         if (second_pass) {
-            strcpy(second_pass, full_path);
+            memcpy(second_pass, full_path, fp_len + 1);
             url_decode(full_path, second_pass);
             if (strchr(full_path, '%')) {
                 req.method = NULL;
@@ -1068,7 +1071,9 @@ int server_start(int port, int mode, RequestHandler handler) {
                         ec->ctx = ctx;
 
                         const char *ip = inet_ntop(AF_INET, &addr.sin_addr, ec->client_ip, sizeof(ec->client_ip));
-                        if (!ip) strcpy(ec->client_ip, "0.0.0.0");
+                        if (!ip) {
+                            memcpy(ec->client_ip, "0.0.0.0", 8);
+                        }
 
                         pool_push(ec);
                     }
