@@ -108,10 +108,10 @@ int arws_build_http_request(ClientConnection *conn, HttpRequest *req,
     pos = append_str(buf, bufsize, pos, "\r\n");
     if (pos < 0) return -1;
 
-    if (req->body && req->body[0]) {
+    if (req->body && req->body_length_in_buffer > 0) {
         int rem = bufsize - pos;
         if (rem > 0) {
-            int body_len = strlen(req->body);
+            int body_len = req->body_length_in_buffer;
             int to_copy = body_len < rem ? body_len : rem;
             memcpy(buf + pos, req->body, to_copy);
             pos += to_copy;
@@ -254,7 +254,7 @@ int arws_stream_proxy_forward(ClientConnection *conn, HttpRequest *req,
     int target_fd = upstream_get_conn(host, port);
     if (target_fd < 0) { arws_send_502(conn, "Bad Gateway"); return -1; }
 
-    size_t req_body_len = (req->body && req->body[0]) ? strlen(req->body) : 0;
+    size_t req_body_len = req->body_length_in_buffer > 0 ? (size_t)req->body_length_in_buffer : 0;
     size_t raw_buf_size = req_body_len + 65536;
     unsigned char *raw_buf = (unsigned char *)ar_mem_alloc(raw_buf_size);
     if (!raw_buf) {

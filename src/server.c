@@ -521,6 +521,7 @@ static void handle_client(ClientConnection *conn) {
     char *body_start = NULL;
     long content_length = 0;
     int headers_parsed = 0;
+    char *q_copy = NULL;
 
     while (1) {
         if (total_read >= buffer_size - 1) {
@@ -654,10 +655,17 @@ static void handle_client(ClientConnection *conn) {
     char *query = strchr(full_path, '?');
     if (query) {
         *query = '\0';
-        req.query_params = query + 1;
+        char *q_raw = query + 1;
+        q_copy = (char *)ar_mem_alloc(strlen(q_raw) + 1);
+        if (q_copy) {
+            strcpy(q_copy, q_raw);
+            req.query_params = q_copy;
+        } else {
+            req.query_params = q_raw;
+        }
 
         req.query_count = 0;
-        char *q = req.query_params;
+        char *q = q_raw;
         while (q && *q && req.query_count < 50) {
             char *amp = strchr(q, '&');
             if (amp) *amp = '\0';
@@ -794,6 +802,7 @@ static void handle_client(ClientConnection *conn) {
                              "<p>Voce atingiu o limite de requisicoes. Por favor, aguarde alguns segundos.</p>"
                              "</body></html>");
         if (req.json_doc) cJSON_Delete(req.json_doc);
+        if (q_copy) ar_mem_free(q_copy);
         ar_mem_free(buffer);
         return;
     }
@@ -805,6 +814,7 @@ static void handle_client(ClientConnection *conn) {
     }
 
     if (req.json_doc) cJSON_Delete(req.json_doc);
+    if (q_copy) ar_mem_free(q_copy);
     ar_mem_free(buffer);
 }
 
