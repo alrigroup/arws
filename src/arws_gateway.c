@@ -813,9 +813,8 @@ static void *client_handler_loop(void *arg) {
         arws_remove_routes_by_backend(bid);
         arws_unregister_backend(bid);
         alri_print(CYN "[ARWS]" RST " Cleaned up backend id=%d (fd=%d)\n", bid, client_fd);
-    } else {
-        ar_socket_close(client_fd);
     }
+    ar_socket_close(client_fd);
 
     named_remove(client_fd);
 

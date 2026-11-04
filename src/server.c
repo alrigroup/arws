@@ -6,6 +6,9 @@
  * and at: https://github.com/alrigroup/licenses/tree/main
  */
 
+#ifndef _WIN32
+#include <sys/resource.h>
+#endif
 #include "server.h"
 #include "cJSON.h"
 #include "log.h"
@@ -929,6 +932,19 @@ void server_stop(void) {
 int server_start(int port, int mode, RequestHandler handler) {
     global_api_handler = handler;
     http_server_running = 1;
+
+#ifndef _WIN32
+    struct rlimit rl;
+    if (getrlimit(RLIMIT_NOFILE, &rl) == 0) {
+        rlim_t target = 65536;
+        if (rl.rlim_max > 0 && target > rl.rlim_max) target = rl.rlim_max;
+        if (rl.rlim_cur < target) {
+            rl.rlim_cur = target;
+            setrlimit(RLIMIT_NOFILE, &rl);
+        }
+    }
+#endif
+
     if (!conn_limit_mutex)
         conn_limit_mutex = ar_mutex_create();
     if (econn_pool)
@@ -1055,7 +1071,12 @@ int server_start(int port, int mode, RequestHandler handler) {
                         struct sockaddr_in addr;
                         socklen_t addr_len = sizeof(addr);
                         int csock = accept(server_sock, (struct sockaddr*)&addr, &addr_len);
-                        if (csock < 0) break;
+                        if (csock < 0) {
+                            if (errno == EMFILE || errno == ENFILE) {
+                                ar_sleep_ms(20);
+                            }
+                            break;
+                        }
 
                         ar_mutex_lock(conn_limit_mutex);
                         if (active_connections >= MAX_CONNECTIONS) {
