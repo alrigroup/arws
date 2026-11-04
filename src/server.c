@@ -6,6 +6,9 @@
  * and at: https://github.com/alrigroup/licenses/tree/main
  */
 
+#ifndef _WIN32
+#include <sys/resource.h>
+#endif
 #include "server.h"
 #include "cJSON.h"
 #include "log.h"
@@ -521,6 +524,7 @@ static void handle_client(ClientConnection *conn) {
     char *body_start = NULL;
     long content_length = 0;
     int headers_parsed = 0;
+    char *q_copy = NULL;
 
     while (1) {
         if (total_read >= buffer_size - 1) {
@@ -654,10 +658,17 @@ static void handle_client(ClientConnection *conn) {
     char *query = strchr(full_path, '?');
     if (query) {
         *query = '\0';
-        req.query_params = query + 1;
+        char *q_raw = query + 1;
+        q_copy = (char *)ar_mem_alloc(strlen(q_raw) + 1);
+        if (q_copy) {
+            strcpy(q_copy, q_raw);
+            req.query_params = q_copy;
+        } else {
+            req.query_params = q_raw;
+        }
 
         req.query_count = 0;
-        char *q = req.query_params;
+        char *q = q_raw;
         while (q && *q && req.query_count < 50) {
             char *amp = strchr(q, '&');
             if (amp) *amp = '\0';
@@ -794,6 +805,7 @@ static void handle_client(ClientConnection *conn) {
                              "<p>Voce atingiu o limite de requisicoes. Por favor, aguarde alguns segundos.</p>"
                              "</body></html>");
         if (req.json_doc) cJSON_Delete(req.json_doc);
+        if (q_copy) ar_mem_free(q_copy);
         ar_mem_free(buffer);
         return;
     }
@@ -805,6 +817,7 @@ static void handle_client(ClientConnection *conn) {
     }
 
     if (req.json_doc) cJSON_Delete(req.json_doc);
+    if (q_copy) ar_mem_free(q_copy);
     ar_mem_free(buffer);
 }
 
@@ -919,6 +932,19 @@ void server_stop(void) {
 int server_start(int port, int mode, RequestHandler handler) {
     global_api_handler = handler;
     http_server_running = 1;
+
+#ifndef _WIN32
+    struct rlimit rl;
+    if (getrlimit(RLIMIT_NOFILE, &rl) == 0) {
+        rlim_t target = 65536;
+        if (rl.rlim_max > 0 && target > rl.rlim_max) target = rl.rlim_max;
+        if (rl.rlim_cur < target) {
+            rl.rlim_cur = target;
+            setrlimit(RLIMIT_NOFILE, &rl);
+        }
+    }
+#endif
+
     if (!conn_limit_mutex)
         conn_limit_mutex = ar_mutex_create();
     if (econn_pool)
@@ -1045,7 +1071,12 @@ int server_start(int port, int mode, RequestHandler handler) {
                         struct sockaddr_in addr;
                         socklen_t addr_len = sizeof(addr);
                         int csock = accept(server_sock, (struct sockaddr*)&addr, &addr_len);
-                        if (csock < 0) break;
+                        if (csock < 0) {
+                            if (errno == EMFILE || errno == ENFILE) {
+                                ar_sleep_ms(20);
+                            }
+                            break;
+                        }
 
                         ar_mutex_lock(conn_limit_mutex);
                         if (active_connections >= MAX_CONNECTIONS) {
