@@ -308,7 +308,10 @@ static int peek_is_ipc_frame(int fd) {
                          ((uint32_t)peek[3]);
     int type = peek[4];
 
-    return (frame_len <= AR_IPC_BUF_SIZE && type >= 1 && type <= 25);
+    if (frame_len > AR_IPC_BUF_SIZE || type < 1 || type > 25) {
+        return -1; /* Malformed or unknown non-IPC protocol: drop and close immediately */
+    }
+    return 1;
 }
 
 static void handle_arws_query(int fd, const char *q, int len) {

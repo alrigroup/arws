@@ -373,10 +373,11 @@ int arws_route_match(ClientConnection *conn, HttpRequest *req,
                     if (path_matches(current->route.prefix, req->path)) {
 
                         int mode_match = 0;
+                        const char *eff = (effective_mode && effective_mode[0] != '\0') ? effective_mode : "production";
                         if (current->route.mode[0] == '\0' ||
                             current->route.use_stream ||
                             current->route.proxy_target[0] != '\0' ||
-                            strcmp(current->route.mode, effective_mode) == 0 ||
+                            strcmp(current->route.mode, eff) == 0 ||
                             strcmp(current->route.mode, "*") == 0) {
                             mode_match = 1;
                         }

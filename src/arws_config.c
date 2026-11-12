@@ -700,6 +700,7 @@ const char* arws_config_get_bind_address(void) {
 }
 
 const char* arws_config_get_effective_mode(const char *host, const char *path, const char *client_ip) {
+    if (!config_mutex) return MODE_PRODUCTION;
     ar_mutex_lock(config_mutex);
 
     if (strcmp(global_mode, MODE_MAINTENANCE) == 0) {
@@ -719,22 +720,29 @@ const char* arws_config_get_effective_mode(const char *host, const char *path, c
         if (host_matches(overrides[i].host, host) &&
             path_matches_pattern(path, overrides[i].path)) {
             const char *ret = overrides[i].mode;
-            if (strcmp(ret, MODE_MAINTENANCE) == 0 && client_ip) {
-                for (int j = 0; j < maintenance_ip_count; j++) {
-                    if (strcmp(maintenance_ips[j], client_ip) == 0) {
-                        ar_mutex_unlock(config_mutex);
-                        return MODE_PRODUCTION;
+            if (strcmp(ret, MODE_MAINTENANCE) == 0) {
+                if (client_ip) {
+                    for (int j = 0; j < maintenance_ip_count; j++) {
+                        if (strcmp(maintenance_ips[j], client_ip) == 0) {
+                            ar_mutex_unlock(config_mutex);
+                            return MODE_PRODUCTION;
+                        }
                     }
                 }
+                ar_mutex_unlock(config_mutex);
+                return MODE_MAINTENANCE;
+            }
+            if (strcmp(ret, MODE_TEST) == 0) {
+                ar_mutex_unlock(config_mutex);
+                return MODE_TEST;
             }
             ar_mutex_unlock(config_mutex);
-            return ret;
+            return MODE_PRODUCTION;
         }
     }
 
     ar_mutex_unlock(config_mutex);
-
-    return global_mode;
+    return MODE_PRODUCTION;
 }
 
 int arws_config_is_maintenance_ip(const char *client_ip) {
