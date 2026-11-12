@@ -835,7 +835,7 @@ static void resolve_client_ip(int sock, char *ip_buf, int ip_buf_len) {
     ip_buf[ip_buf_len - 1] = '\0';
 }
 
-#define POOL_SIZE 512
+#define POOL_SIZE 64
 #define QUEUE_SIZE 16384
 
 typedef struct {

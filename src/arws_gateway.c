@@ -472,6 +472,12 @@ static void *client_handler_loop(void *arg) {
         }
         if (peek_res == 0) {
             idle_rounds++;
+            /* If connection has been completely idle without registering a backend for > 60s (6000 * 10ms), close gracefully */
+            int bid = arws_find_backend_id_by_fd(client_fd);
+            if (bid <= 0 && idle_rounds >= 6000) {
+                alri_print(CYN "[ARWS]" RST " client_handler_loop idle timeout for fd=%d\n", client_fd);
+                break;
+            }
             ar_sleep_ms(10);
             continue;
         }
