@@ -586,6 +586,12 @@ const char* arws_config_get_path(void) {
     return ret;
 }
 
+void arws_config_refresh_mtime(void) {
+    if (config_path[0] != '\0') {
+        last_config_mtime = file_mtime(config_path);
+    }
+}
+
 int arws_config_reload_from_disk(void) {
     if (config_path[0] == '\0') return -1;
     return arws_config_load(config_path);

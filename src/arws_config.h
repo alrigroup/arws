@@ -13,7 +13,7 @@
 #define MODE_TEST        "test"
 #define MODE_MAINTENANCE "maintenance"
 
-#define MAX_OVERRIDES       128
+#define MAX_OVERRIDES       1024
 #define MAX_MAINTENANCE_IPS 32
 
 typedef enum {
@@ -30,6 +30,7 @@ const char*  arws_config_get_bind_address(void);
 
 int arws_config_load(const char *path);
 const char* arws_config_get_path(void);
+void arws_config_refresh_mtime(void);
 int arws_config_reload_from_disk(void);
 void arws_config_watchdog_stop(void);
 

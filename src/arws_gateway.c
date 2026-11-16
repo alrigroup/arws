@@ -530,7 +530,9 @@ static void *client_handler_loop(void *arg) {
 
                 named_add(client_fd, name);
 
-                arws_config_reload_from_disk();
+                /* Do NOT reload static config from disk on every dynamic app IPC_REGISTER,
+                   as the dynamic route is already registered directly without disk thrashing. */
+                arws_config_refresh_mtime();
 
                 /* type= (proxy|stream|redirect|backend) separated from mode
                    (operational). redirect=<url> registers a 302 route. */

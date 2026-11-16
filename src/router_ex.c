@@ -46,13 +46,28 @@ void arws_route_init(void) {
     ar_mutex_unlock(route_mutex);
 }
 
+static RouteNode* find_existing_route_node_locked(unsigned int idx, const char *prefix,
+                                                  const char *method, const char *host,
+                                                  const char *mode) {
+    RouteNode *curr = route_table[idx];
+    const char *h = host ? host : "";
+    const char *m = mode ? mode : "";
+    while (curr) {
+        if (strcmp(curr->route.prefix, prefix) == 0 &&
+            strcmp(curr->route.method, method) == 0 &&
+            strcmp(curr->route.host, h) == 0 &&
+            strcmp(curr->route.mode, m) == 0) {
+            return curr;
+        }
+        curr = curr->next;
+    }
+    return NULL;
+}
+
 int arws_add_redirect_route(const char *prefix, const char *method,
                             const char *host, const char *mode,
                             const char *target_url) {
     if (!prefix || !method || !target_url) return -1;
-
-    RouteNode *node = (RouteNode *)ar_mem_alloc(sizeof(RouteNode));
-    if (!node) return -1;
 
     char normalized[256];
     if (strcmp(prefix, "*") == 0) {
@@ -61,6 +76,27 @@ int arws_add_redirect_route(const char *prefix, const char *method,
         snprintf(normalized, sizeof(normalized), "/%s", prefix);
         prefix = normalized;
     }
+
+    unsigned int idx = hash_route(prefix, method, host, mode);
+
+    ar_mutex_lock(route_mutex);
+    RouteNode *existing = find_existing_route_node_locked(idx, prefix, method, host, mode);
+    if (existing) {
+        strncpy(existing->route.redirect_target, target_url, sizeof(existing->route.redirect_target) - 1);
+        existing->route.use_redirect = 1;
+        existing->route.use_stream = 0;
+        existing->route.use_handler = 0;
+        existing->route.proxy_target[0] = '\0';
+        ar_mutex_unlock(route_mutex);
+        return 0;
+    }
+
+    RouteNode *node = (RouteNode *)ar_mem_alloc(sizeof(RouteNode));
+    if (!node) {
+        ar_mutex_unlock(route_mutex);
+        return -1;
+    }
+
     strncpy(node->route.prefix, prefix, sizeof(node->route.prefix) - 1);
     strncpy(node->route.method, method, sizeof(node->route.method) - 1);
     node->route.host[0] = '\0';
@@ -73,10 +109,8 @@ int arws_add_redirect_route(const char *prefix, const char *method,
     node->route.use_redirect = 1;
     node->route.handler = NULL;
     strncpy(node->route.redirect_target, target_url, sizeof(node->route.redirect_target) - 1);
+    node->route.proxy_target[0] = '\0';
 
-    unsigned int idx = hash_route(prefix, method, host, mode);
-
-    ar_mutex_lock(route_mutex);
     node->next = route_table[idx];
     route_table[idx] = node;
     ar_mutex_unlock(route_mutex);
@@ -91,9 +125,6 @@ int arws_add_route(const char *prefix, const char *method,
                    int backend_id) {
     if (!prefix || !method) return -1;
 
-    RouteNode *node = (RouteNode *)ar_mem_alloc(sizeof(RouteNode));
-    if (!node) return -1;
-
     char normalized[256];
     if (strcmp(prefix, "*") == 0) {
         prefix = "/*";
@@ -101,6 +132,26 @@ int arws_add_route(const char *prefix, const char *method,
         snprintf(normalized, sizeof(normalized), "/%s", prefix);
         prefix = normalized;
     }
+
+    unsigned int idx = hash_route(prefix, method, host, mode);
+
+    ar_mutex_lock(route_mutex);
+    RouteNode *existing = find_existing_route_node_locked(idx, prefix, method, host, mode);
+    if (existing) {
+        existing->route.backend_id = backend_id;
+        existing->route.use_handler = 0;
+        existing->route.use_stream = 0;
+        existing->route.use_redirect = 0;
+        ar_mutex_unlock(route_mutex);
+        return 0;
+    }
+
+    RouteNode *node = (RouteNode *)ar_mem_alloc(sizeof(RouteNode));
+    if (!node) {
+        ar_mutex_unlock(route_mutex);
+        return -1;
+    }
+
     strncpy(node->route.prefix, prefix, sizeof(node->route.prefix) - 1);
     strncpy(node->route.method, method, sizeof(node->route.method) - 1);
     node->route.host[0] = '\0';
@@ -113,13 +164,9 @@ int arws_add_route(const char *prefix, const char *method,
     node->route.use_redirect = 0;
     node->route.handler = NULL;
 
-    unsigned int idx = hash_route(prefix, method, host, mode);
-
-    ar_mutex_lock(route_mutex);
     node->next = route_table[idx];
     route_table[idx] = node;
     ar_mutex_unlock(route_mutex);
-
     return 0;
 }
 
@@ -128,9 +175,6 @@ int arws_add_proxy_route(const char *prefix, const char *method,
                          const char *target_url) {
     if (!prefix || !method || !target_url) return -1;
 
-    RouteNode *node = (RouteNode *)ar_mem_alloc(sizeof(RouteNode));
-    if (!node) return -1;
-
     char normalized[256];
     if (strcmp(prefix, "*") == 0) {
         prefix = "/*";
@@ -138,6 +182,27 @@ int arws_add_proxy_route(const char *prefix, const char *method,
         snprintf(normalized, sizeof(normalized), "/%s", prefix);
         prefix = normalized;
     }
+
+    unsigned int idx = hash_route(prefix, method, host, mode);
+
+    ar_mutex_lock(route_mutex);
+    RouteNode *existing = find_existing_route_node_locked(idx, prefix, method, host, mode);
+    if (existing) {
+        strncpy(existing->route.proxy_target, target_url, sizeof(existing->route.proxy_target) - 1);
+        existing->route.backend_id = -1;
+        existing->route.use_handler = 0;
+        existing->route.use_stream = 0;
+        existing->route.use_redirect = 0;
+        ar_mutex_unlock(route_mutex);
+        return 0;
+    }
+
+    RouteNode *node = (RouteNode *)ar_mem_alloc(sizeof(RouteNode));
+    if (!node) {
+        ar_mutex_unlock(route_mutex);
+        return -1;
+    }
+
     strncpy(node->route.prefix, prefix, sizeof(node->route.prefix) - 1);
     strncpy(node->route.method, method, sizeof(node->route.method) - 1);
     node->route.host[0] = '\0';
@@ -151,9 +216,6 @@ int arws_add_proxy_route(const char *prefix, const char *method,
     node->route.handler = NULL;
     strncpy(node->route.proxy_target, target_url, sizeof(node->route.proxy_target) - 1);
 
-    unsigned int idx = hash_route(prefix, method, host, mode);
-
-    ar_mutex_lock(route_mutex);
     node->next = route_table[idx];
     route_table[idx] = node;
     ar_mutex_unlock(route_mutex);
@@ -168,9 +230,6 @@ int arws_add_stream_route(const char *prefix, const char *method,
                           const char *target_url) {
     if (!prefix || !method || !target_url) return -1;
 
-    RouteNode *node = (RouteNode *)ar_mem_alloc(sizeof(RouteNode));
-    if (!node) return -1;
-
     char normalized[256];
     if (strcmp(prefix, "*") == 0) {
         prefix = "/*";
@@ -178,6 +237,27 @@ int arws_add_stream_route(const char *prefix, const char *method,
         snprintf(normalized, sizeof(normalized), "/%s", prefix);
         prefix = normalized;
     }
+
+    unsigned int idx = hash_route(prefix, method, host, mode);
+
+    ar_mutex_lock(route_mutex);
+    RouteNode *existing = find_existing_route_node_locked(idx, prefix, method, host, mode);
+    if (existing) {
+        strncpy(existing->route.proxy_target, target_url, sizeof(existing->route.proxy_target) - 1);
+        existing->route.backend_id = -1;
+        existing->route.use_handler = 0;
+        existing->route.use_stream = 1;
+        existing->route.use_redirect = 0;
+        ar_mutex_unlock(route_mutex);
+        return 0;
+    }
+
+    RouteNode *node = (RouteNode *)ar_mem_alloc(sizeof(RouteNode));
+    if (!node) {
+        ar_mutex_unlock(route_mutex);
+        return -1;
+    }
+
     strncpy(node->route.prefix, prefix, sizeof(node->route.prefix) - 1);
     strncpy(node->route.method, method, sizeof(node->route.method) - 1);
     node->route.host[0] = '\0';
@@ -191,9 +271,6 @@ int arws_add_stream_route(const char *prefix, const char *method,
     node->route.handler = NULL;
     strncpy(node->route.proxy_target, target_url, sizeof(node->route.proxy_target) - 1);
 
-    unsigned int idx = hash_route(prefix, method, host, mode);
-
-    ar_mutex_lock(route_mutex);
     node->next = route_table[idx];
     route_table[idx] = node;
     ar_mutex_unlock(route_mutex);
