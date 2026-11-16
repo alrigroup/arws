@@ -26,7 +26,7 @@ typedef struct RouteNode {
 static RouteNode *route_table[ROUTE_HASH_SIZE] = {0};
 static void *route_mutex = NULL;
 
-static int rr_counter = 0;
+static unsigned int rr_counter = 0;
 
 static unsigned int hash_route(const char *prefix, const char *method,
                                const char *host, const char *mode) {
@@ -285,8 +285,25 @@ int arws_add_handler(const char *prefix, const char *method,
                      RequestHandler handler) {
     if (!prefix || !method || !handler) return -1;
 
+    unsigned int idx = hash_route(prefix, method, host, mode);
+
+    ar_mutex_lock(route_mutex);
+    RouteNode *existing = find_existing_route_node_locked(idx, prefix, method, host, mode);
+    if (existing) {
+        existing->route.handler = handler;
+        existing->route.use_handler = 1;
+        existing->route.use_stream = 0;
+        existing->route.use_redirect = 0;
+        existing->route.backend_id = -1;
+        ar_mutex_unlock(route_mutex);
+        return 0;
+    }
+
     RouteNode *node = (RouteNode *)ar_mem_alloc(sizeof(RouteNode));
-    if (!node) return -1;
+    if (!node) {
+        ar_mutex_unlock(route_mutex);
+        return -1;
+    }
 
     strncpy(node->route.prefix, prefix, sizeof(node->route.prefix) - 1);
     strncpy(node->route.method, method, sizeof(node->route.method) - 1);
@@ -300,9 +317,6 @@ int arws_add_handler(const char *prefix, const char *method,
     node->route.use_redirect = 0;
     node->route.handler = handler;
 
-    unsigned int idx = hash_route(prefix, method, host, mode);
-
-    ar_mutex_lock(route_mutex);
     node->next = route_table[idx];
     route_table[idx] = node;
     ar_mutex_unlock(route_mutex);
@@ -478,7 +492,7 @@ int arws_route_match(ClientConnection *conn, HttpRequest *req,
 
     RouteNode *chosen = NULL;
     if (candidate_count > 0) {
-        int idx = rr_counter % candidate_count;
+        unsigned int idx = rr_counter % (unsigned int)candidate_count;
         rr_counter++;
         chosen = candidates[idx];
     }

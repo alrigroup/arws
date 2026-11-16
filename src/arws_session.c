@@ -123,7 +123,7 @@ int arws_session_destroy(const char *token) {
 
     ar_mutex_lock(session_mutex);
     for (int i = 0; i < ARWS_MAX_SESSIONS; i++) {
-        if (sessions[i].valid && strcmp(sessions[i].token, token) == 0) {
+        if (sessions[i].valid && tokens_match(sessions[i].token, token)) {
             sessions[i].valid = 0;
             session_count--;
             ar_mutex_unlock(session_mutex);

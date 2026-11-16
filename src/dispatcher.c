@@ -56,13 +56,16 @@ static int response_has_set_cookie(const unsigned char *buf, int len) {
     for (int i = 0; i + 3 < len; i++) {
         if (buf[i] == '\r' && buf[i + 1] == '\n' &&
             buf[i + 2] == '\r' && buf[i + 3] == '\n') {
-            hlen = i;
+            hlen = i + 4;
             break;
         }
     }
-    for (int i = 0; i + 10 < hlen; i++) {
-        if (header_name_eq((const char *)buf + i, "Set-Cookie", 10) == 0)
-            return 1;
+    for (int i = 0; i + 12 < hlen; i++) {
+        if (i == 0 || (buf[i - 1] == '\n' && buf[i - 2] == '\r')) {
+            if (header_name_eq((const char *)buf + i, "Set-Cookie", 10)) {
+                return 1;
+            }
+        }
     }
     return 0;
 }
@@ -93,10 +96,13 @@ int arws_dispatch(ClientConnection *conn, HttpRequest *req, const char *effectiv
 
     if (result == 1 && route.proxy_target[0] != '\0') {
         char final_target[256];
+        const char *pool_name = NULL;
+        ArwsBackendNode *selected_node = NULL;
+
         if (route.proxy_target[0] == '@') {
-            const char *pool_name = route.proxy_target + 1;
+            pool_name = route.proxy_target + 1;
             const char *client_ip = server_get_client_ip(conn);
-            ArwsBackendNode *selected_node = arws_upstream_select(pool_name, client_ip);
+            selected_node = arws_upstream_select(pool_name, client_ip);
             if (!selected_node) {
                 alri_print(RED "[ARWS-LB]" RST " No healthy backends in pool '@%s'\n", pool_name);
                 arws_send_503(conn, "No healthy backend available in upstream pool");
@@ -109,7 +115,12 @@ int arws_dispatch(ClientConnection *conn, HttpRequest *req, const char *effectiv
             final_target[sizeof(final_target) - 1] = '\0';
         }
 
-        return arws_stream_proxy_forward(conn, req, final_target);
+        int fwd_res = arws_stream_proxy_forward(conn, req, final_target);
+        if (selected_node && pool_name) {
+            int status = (fwd_res == 0) ? 200 : 502;
+            arws_upstream_release(pool_name, selected_node, status);
+        }
+        return fwd_res;
     }
 
     if (result == 1 && route.backend_id >= 0) {

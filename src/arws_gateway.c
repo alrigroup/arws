@@ -374,8 +374,8 @@ static void handle_arws_query(int fd, const char *q, int len) {
             arws_config_get_mode_name(), arws_config_get_port(),
             arws_config_get_bind_address(), arws_config_get_global_mode());
     } else if (strcmp(cmd, "routes") == 0) {
-        rlen = arws_config_dump_routes(resp, sizeof(resp));
-        if (rlen <= 0) rlen = snprintf(resp, sizeof(resp), "no routes");
+        rlen = arws_config_dump_routes(resp, AR_IPC_BUF_SIZE);
+        if (rlen <= 0) rlen = snprintf(resp, AR_IPC_BUF_SIZE, "no routes");
     } else if (strcmp(cmd, "upstream") == 0) {
         char subcmd[32] = {0};
         int off = 0;
@@ -386,21 +386,21 @@ static void handle_arws_query(int fd, const char *q, int len) {
             ArwsUpstreamPool pools[ARWS_MAX_POOLS];
             int pcount = arws_upstream_get_all_pools(pools, ARWS_MAX_POOLS);
             if (pcount == 0) {
-                rlen = snprintf(resp, sizeof(resp), "No upstream pools registered.\n");
+                rlen = snprintf(resp, AR_IPC_BUF_SIZE, "No upstream pools registered.\n");
             } else {
-                rlen = snprintf(resp, sizeof(resp), "UPSTREAM POOLS (%d):\n", pcount);
-                if (rlen < 0 || (size_t)rlen >= sizeof(resp)) rlen = (int)sizeof(resp) - 1;
+                rlen = snprintf(resp, AR_IPC_BUF_SIZE, "UPSTREAM POOLS (%d):\n", pcount);
+                if (rlen < 0 || rlen >= AR_IPC_BUF_SIZE) rlen = AR_IPC_BUF_SIZE - 1;
                 for (int p = 0; p < pcount; p++) {
                     ArwsUpstreamPool *up = &pools[p];
                     const char *algo_str = (up->algo == ARWS_LB_ROUND_ROBIN) ? "round_robin" :
                                            (up->algo == ARWS_LB_LEAST_CONN) ? "least_conn" :
                                            (up->algo == ARWS_LB_IP_HASH) ? "ip_hash" : "weighted_round_robin";
-                    append_resp(resp, sizeof(resp), &rlen,
+                    append_resp(resp, AR_IPC_BUF_SIZE, &rlen,
                                 "  Pool '@%s' [algo=%s, nodes=%d]:\n",
                                 up->name, algo_str, up->node_count);
                     for (int n = 0; n < up->node_count; n++) {
                         ArwsBackendNode *bn = &up->nodes[n];
-                        append_resp(resp, sizeof(resp), &rlen,
+                        append_resp(resp, AR_IPC_BUF_SIZE, &rlen,
                                     "    - %s:%d weight=%d conns=%d alive=%s backup=%s drain=%s reqs=%llu errs=%llu\n",
                                     bn->host, bn->port, bn->weight, bn->active_conns,
                                     bn->is_alive ? "UP" : "DOWN",
@@ -459,7 +459,11 @@ static void handle_arws_query(int fd, const char *q, int len) {
 static void *client_handler_loop(void *arg) {
     int client_fd = (int)(intptr_t)arg;
     unsigned char *buf = (unsigned char *)malloc(AR_IPC_BUF_SIZE);
-    if (!buf) { ar_socket_close(client_fd); return NULL; }
+    if (!buf) {
+        ar_socket_close(client_fd);
+        remove_client_fd(client_fd);
+        return NULL;
+    }
 
     alri_print(CYN "[ARWS]" RST " client_handler_loop started for fd=%d\n", client_fd);
 
@@ -957,6 +961,17 @@ void arws_stop(void) {
     }
 
     arws_close_all_backends();
+
+    if (query_locks) {
+        free(query_locks);
+        query_locks = NULL;
+        query_locks_max = 0;
+    }
+    if (query_resp_slots) {
+        free(query_resp_slots);
+        query_resp_slots = NULL;
+        query_resp_slots_max = 0;
+    }
 
     alri_print(CYN "[ARWS]" RST " Gateway stopped\n");
 }

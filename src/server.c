@@ -26,6 +26,7 @@
 #include <sys/socket.h>
 #include <sys/select.h>
 #include <netinet/in.h>
+#include <netinet/tcp.h>
 #include <arpa/inet.h>
 #include <unistd.h>
 #include <fcntl.h>
@@ -355,19 +356,25 @@ int server_serve_file(ClientConnection *conn, const char *filepath, const char *
     if (server_conn_write(conn, headers, hlen) <= 0) { close(fd); return 0; }
 
 #ifdef __linux__
-    off_t offset = 0;
-    while (offset < fsize) {
-        ssize_t n = sendfile(conn->socket_fd, fd, &offset, (size_t)(fsize - offset));
-        if (n <= 0) break;
+    if (conn->mode != MODE_SECURE) {
+        off_t offset = 0;
+        while (offset < fsize) {
+            ssize_t n = sendfile(conn->socket_fd, fd, &offset, (size_t)(fsize - offset));
+            if (n <= 0) break;
+        }
+        close(fd);
+        track_access(conn->client_ip, conn->current_path, 200, conn->anon_id);
+        return 1;
     }
-#else
+#endif
+
+    /* Modo Seguro (TLS 1.3) ou Fallback: leitura e criptografia via server_conn_write */
     char chunk[8192];
     ssize_t nread;
     lseek(fd, 0, SEEK_SET);
     while ((nread = read(fd, chunk, sizeof(chunk))) > 0) {
-        if (ar_socket_send(conn->socket_fd, chunk, (size_t)nread) <= 0) break;
+        if (server_conn_write(conn, chunk, (int)nread) <= 0) break;
     }
-#endif
 
     close(fd);
     track_access(conn->client_ip, conn->current_path, 200, conn->anon_id);
@@ -510,6 +517,8 @@ static void *redirector_thread(void *arg) {
                 ar_mem_free(sock_ptr);
                 ar_socket_close(client_socket);
             }
+        } else {
+            ar_socket_close(client_socket);
         }
     }
     return NULL;
@@ -1077,6 +1086,13 @@ int server_start(int port, int mode, RequestHandler handler) {
                             }
                             break;
                         }
+
+                        int nodelay_flag = 1;
+#ifdef _WIN32
+                        setsockopt(csock, IPPROTO_TCP, TCP_NODELAY, (const char*)&nodelay_flag, sizeof(int));
+#else
+                        setsockopt(csock, IPPROTO_TCP, TCP_NODELAY, (void*)&nodelay_flag, sizeof(int));
+#endif
 
                         ar_mutex_lock(conn_limit_mutex);
                         if (active_connections >= MAX_CONNECTIONS) {

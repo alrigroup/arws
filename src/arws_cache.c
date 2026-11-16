@@ -59,7 +59,7 @@ static int evict_one(void) {
         if (!cache[i].in_use) continue;
         if (cache[i].ttl > 0 &&
             (ar_time_ms() - cache[i].stored_at) > (uint64_t)cache[i].ttl * 1000) {
-            free(cache[i].data);
+            ar_mem_free(cache[i].data);
             memset(&cache[i], 0, sizeof(CacheEntry));
             return i;
         }
@@ -70,7 +70,7 @@ static int evict_one(void) {
     }
 
     if (oldest_slot >= 0) {
-        free(cache[oldest_slot].data);
+        ar_mem_free(cache[oldest_slot].data);
         memset(&cache[oldest_slot], 0, sizeof(CacheEntry));
         return oldest_slot;
     }
@@ -114,7 +114,7 @@ int arws_cache_get(const char *key, unsigned char **out_data, int *out_len) {
 
     if (cache[slot].ttl > 0 &&
         (ar_time_ms() - cache[slot].stored_at) > (uint64_t)cache[slot].ttl * 1000) {
-        free(cache[slot].data);
+        ar_mem_free(cache[slot].data);
         memset(&cache[slot], 0, sizeof(CacheEntry));
         ar_mutex_unlock(shard_mutexes[shard]);
         return -1;
@@ -150,7 +150,7 @@ int arws_cache_set(const char *key, const unsigned char *data, int len) {
     }
 
     if (cache[slot].in_use)
-        free(cache[slot].data);
+        ar_mem_free(cache[slot].data);
 
     cache[slot].data = (unsigned char *)ar_mem_alloc(len);
     if (!cache[slot].data) {
@@ -175,8 +175,8 @@ void arws_cache_clear(void) {
         ar_mutex_lock(shard_mutexes[s]);
     }
     for (int i = 0; i < ARWS_CACHE_MAX_ENTRIES; i++) {
-        if (cache[i].in_use) {
-            free(cache[i].data);
+        if (cache[i].in_use && cache[i].data) {
+            ar_mem_free(cache[i].data);
         }
     }
     memset(cache, 0, sizeof(cache));
@@ -198,7 +198,7 @@ void arws_cache_cleanup(void) {
         if (!cache[i].in_use) continue;
         if (cache[i].ttl > 0 &&
             (now - cache[i].stored_at) > (uint64_t)cache[i].ttl * 1000) {
-            free(cache[i].data);
+            if (cache[i].data) ar_mem_free(cache[i].data);
             memset(&cache[i], 0, sizeof(CacheEntry));
             removed++;
         }

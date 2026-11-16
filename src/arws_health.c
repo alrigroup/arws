@@ -96,7 +96,11 @@ static void* health_check_worker(void *arg) {
     (void)arg;
     alri_print(CYN "[ARWS-HEALTH]" RST " Active health check prober started.\n");
 
-    ArwsUpstreamPool pools[ARWS_MAX_POOLS];
+    ArwsUpstreamPool *pools = (ArwsUpstreamPool *)malloc(sizeof(ArwsUpstreamPool) * ARWS_MAX_POOLS);
+    if (!pools) {
+        alri_print(RED "[ARWS-HEALTH]" RST " Failed to allocate health buffer\n");
+        return NULL;
+    }
 
     while (g_health_running) {
         int pool_count = arws_upstream_get_all_pools(pools, ARWS_MAX_POOLS);
@@ -152,6 +156,7 @@ static void* health_check_worker(void *arg) {
         }
     }
 
+    free(pools);
     alri_print(CYN "[ARWS-HEALTH]" RST " Active health check prober stopped.\n");
     return NULL;
 }
