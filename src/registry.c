@@ -158,7 +158,18 @@ static int read_http_response(int fd, unsigned char *buf, int maxlen) {
     int total = 0;
     int header_end = -1;
 
+    ar_socket_set_recv_timeout(fd, 5000);
+
     while (total < maxlen) {
+        fd_set rfds;
+        struct timeval tv;
+        FD_ZERO(&rfds);
+        FD_SET(fd, &rfds);
+        tv.tv_sec = 5;
+        tv.tv_usec = 0;
+        int r = select(fd + 1, &rfds, NULL, NULL, &tv);
+        if (r <= 0) break;
+
         int n = ar_socket_recv(fd, buf + total, maxlen - total);
         if (n <= 0) break;
         total += n;
